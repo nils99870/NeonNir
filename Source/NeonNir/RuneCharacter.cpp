@@ -1,60 +1,72 @@
-// RuneCharacter.cpp
 #include "RuneCharacter.h"
+
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/InputComponent.h"
 #include "GameFramework/Controller.h"
 
 ARuneCharacter::ARuneCharacter()
 {
-    PrimaryActorTick.bCanEverTick = true;
-
-    // --- Camera Boom (3rd person arm) ---
     CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
     CameraBoom->SetupAttachment(RootComponent);
     CameraBoom->TargetArmLength = 300.f;
-    CameraBoom->bUsePawnControlRotation = true; // rotate arm with controller
+    CameraBoom->bUsePawnControlRotation = true;
 
-    // --- Follow Camera ---
     FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
     FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
-    FollowCamera->bUsePawnControlRotation = false; // camera follows boom
+    FollowCamera->bUsePawnControlRotation = false;
 
-    // --- Movement setup ---
-    bUseControllerRotationYaw = false;
-    GetCharacterMovement()->bOrientRotationToMovement = true;
-    GetCharacterMovement()->RotationRate = FRotator(0.f, 540.f, 0.f);
-    GetCharacterMovement()->MaxWalkSpeed = WalkSpeed; // uses default 600
+    bIsSprinting = false;
+    GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 }
 
-void ARuneCharacter::BeginPlay()
+void ARuneCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-    Super::BeginPlay();
-}
+    Super::SetupPlayerInputComponent(PlayerInputComponent);
+    check(PlayerInputComponent);
 
-void ARuneCharacter::Tick(float DeltaTime)
-{
-    Super::Tick(DeltaTime);
+    PlayerInputComponent->BindAxis("MoveForward", this, &ARuneCharacter::MoveForward);
+    PlayerInputComponent->BindAxis("MoveRight", this, &ARuneCharacter::MoveRight);
+    PlayerInputComponent->BindAxis("Turn", this, &ARuneCharacter::Turn);
+    PlayerInputComponent->BindAxis("LookUp", this, &ARuneCharacter::LookUp);
+
+    PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ARuneCharacter::Jump);
+    PlayerInputComponent->BindAction("Jump", IE_Released, this, &ARuneCharacter::StopJumping);
+    PlayerInputComponent->BindAction("Sprint", IE_Pressed, this, &ARuneCharacter::StartSprint);
+    PlayerInputComponent->BindAction("Sprint", IE_Released, this, &ARuneCharacter::StopSprint);
 }
 
 void ARuneCharacter::MoveForward(float Value)
 {
-    if (!Controller || FMath::IsNearlyZero(Value)) return;
-
-    const FRotator ControlRot = Controller->GetControlRotation();
-    const FRotator YawRot(0.f, ControlRot.Yaw, 0.f);
-    const FVector  Dir = FRotationMatrix(YawRot).GetUnitAxis(EAxis::X);
-    AddMovementInput(Dir, Value);
+    if (Controller && Value != 0.f)
+    {
+        const FRotator Rotation = Controller->GetControlRotation();
+        const FRotator YawRotation(0.f, Rotation.Yaw, 0.f);
+        const FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+        AddMovementInput(Direction, Value);
+    }
 }
 
 void ARuneCharacter::MoveRight(float Value)
 {
-    if (!Controller || FMath::IsNearlyZero(Value)) return;
+    if (Controller && Value != 0.f)
+    {
+        const FRotator Rotation = Controller->GetControlRotation();
+        const FRotator YawRotation(0.f, Rotation.Yaw, 0.f);
+        const FVector Direction = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+        AddMovementInput(Direction, Value);
+    }
+}
 
-    const FRotator ControlRot = Controller->GetControlRotation();
-    const FRotator YawRot(0.f, ControlRot.Yaw, 0.f);
-    const FVector  Dir = FRotationMatrix(YawRot).GetUnitAxis(EAxis::Y);
-    AddMovementInput(Dir, Value);
+void ARuneCharacter::Turn(float Value)
+{
+    AddControllerYawInput(Value);
+}
+
+void ARuneCharacter::LookUp(float Value)
+{
+    AddControllerPitchInput(Value);
 }
 
 void ARuneCharacter::StartSprint()
@@ -69,37 +81,8 @@ void ARuneCharacter::StopSprint()
     GetCharacterMovement()->MaxWalkSpeed = WalkSpeed;
 }
 
-void ARuneCharacter::MeleeAttack()
-{
-    UE_LOG(LogTemp, Log, TEXT("Melee Attack"));
-    // TODO: Line/Sphere trace for hit detection
-}
-
 void ARuneCharacter::CastRune()
 {
-    UE_LOG(LogTemp, Log, TEXT("Cast Rune"));
-    // TODO: Spawn projectile / apply effect
+    UE_LOG(LogTemp, Log, TEXT("Casting Rune"));
 }
 
-void ARuneCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
-{
-    Super::SetupPlayerInputComponent(PlayerInputComponent);
-
-    // Movement
-    PlayerInputComponent->BindAxis("MoveForward", this, &ARuneCharacter::MoveForward);
-    PlayerInputComponent->BindAxis("MoveRight", this, &ARuneCharacter::MoveRight);
-    PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
-    PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
-
-    // Jump
-    PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
-    PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
-
-    // Sprint
-    PlayerInputComponent->BindAction("Sprint", IE_Pressed, this, &ARuneCharacter::StartSprint);
-    PlayerInputComponent->BindAction("Sprint", IE_Released, this, &ARuneCharacter::StopSprint);
-
-    // Combat / Abilities
-    PlayerInputComponent->BindAction("MeleeAttack", IE_Pressed, this, &ARuneCharacter::MeleeAttack);
-    PlayerInputComponent->BindAction("CastRune", IE_Pressed, this, &ARuneCharacter::CastRune);
-}
